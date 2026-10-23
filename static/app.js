@@ -179,7 +179,7 @@ form.addEventListener("submit", async (event) => {
     $("scale-note").textContent = `${result.cookie_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
     $("cutter-meta").textContent = `STL · ${result.cutter_depth_mm} mm deep`;
     $("stamp-meta").textContent = `STL · ${result.stamp_impression_mm} mm impression`;
-    for (const kind of ["cutter", "stamp"]) {
+    for (const kind of ["cutter", "stamp", "combined"]) {
       $(`download-${kind}`).href = result.tools[kind].url;
       $(`download-${kind}`).setAttribute("download", result.tools[kind].filename);
       $(`download-${kind}`).title = `Overall tool dimensions: ${result.tools[kind].dimensions_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;

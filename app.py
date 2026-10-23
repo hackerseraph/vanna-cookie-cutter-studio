@@ -12,7 +12,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
-from geometry import DesignError, Settings, build_meshes, preview_svg, trace_image
+from geometry import DesignError, Settings, build_meshes, combined_mesh, preview_svg, trace_image
 from bambuddy import BambuddyClient, BambuddyError, load_config
 
 
@@ -69,6 +69,7 @@ def generate():
     try:
         design = trace_image(image.read(), settings)
         meshes = build_meshes(design)
+        meshes["combined"] = combined_mesh(meshes["cutter"], meshes["stamp"])
         design_id = uuid.uuid4().hex
         name = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(image.filename).stem).strip("-")[:60] or "cookie"
         destination = Path(app.config["OUTPUT_DIR"]) / design_id
@@ -114,13 +115,15 @@ def generate():
 
 @app.get("/api/designs/<design_id>/<kind>")
 def download(design_id: str, kind: str):
-    if not re.fullmatch(r"[0-9a-f]{32}", design_id) or kind not in {"cutter", "stamp", "bundle"}:
+    if not re.fullmatch(r"[0-9a-f]{32}", design_id) or kind not in {"cutter", "stamp", "combined", "bundle"}:
         return jsonify(error="Design not found."), 404
     directory = Path(app.config["OUTPUT_DIR"]) / design_id
     manifest = directory / "design.json"
     if not manifest.is_file():
         return jsonify(error="Design not found."), 404
     metadata = json.loads(manifest.read_text(encoding="utf-8"))
+    if kind != "bundle" and kind not in metadata["tools"]:
+        return jsonify(error="This design has no combined STL. Generate it again to add one."), 404
     filename = "tools.zip" if kind == "bundle" else metadata["tools"][kind]["filename"]
     return send_file(
         directory / filename,
@@ -179,8 +182,8 @@ def send_to_bambuddy():
     kind = payload.get("kind")
     if not isinstance(design_id, str) or not re.fullmatch(r"[0-9a-f]{32}", design_id):
         raise BambuddyError("Choose a generated design to send.")
-    if kind not in ("cutter", "stamp", "pair"):
-        raise BambuddyError("Choose cutter, stamp or pair.")
+    if kind not in ("cutter", "stamp", "pair", "combined"):
+        raise BambuddyError("Choose cutter, stamp, pair or combined STL.")
     config = load_config(Path(app.config["BAMBUDDY_CONFIG"]))
     directory = Path(app.config["OUTPUT_DIR"]) / design_id
     manifest = directory / "design.json"
@@ -188,6 +191,8 @@ def send_to_bambuddy():
         return jsonify(error="Design not found."), 404
     metadata = json.loads(manifest.read_text(encoding="utf-8"))
     kinds = ("cutter", "stamp") if kind == "pair" else (kind,)
+    if any(tool not in metadata["tools"] for tool in kinds):
+        raise BambuddyError("Generate this design again to add the combined STL.")
     models = [directory / metadata["tools"][tool]["filename"] for tool in kinds]
     if not bambuddy_lock.acquire(blocking=False):
         return jsonify(error="Another Bambuddy transfer is running. Try again shortly."), 409

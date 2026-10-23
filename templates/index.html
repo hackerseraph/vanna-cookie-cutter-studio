@@ -74,6 +74,7 @@
             <button type="button" data-view="art" class="active" aria-pressed="true">Cookie artwork</button>
             <button type="button" data-view="cutter" aria-pressed="false">3D cutter</button>
             <button type="button" data-view="stamp" aria-pressed="false">3D stamp</button>
+            <button type="button" data-view="combined" aria-pressed="false">3D pair</button>
           </div>
           <span class="scale-note" id="scale-note"></span>
         </div>
@@ -83,6 +84,7 @@
             <a class="download-card" id="download-cutter"><span class="tool-icon" aria-hidden="true">⬡</span><div><strong>Cookie cutter</strong><span id="cutter-meta"></span></div><span aria-hidden="true">↓</span></a>
             <a class="download-card" id="download-stamp"><span class="tool-icon stamp-icon" aria-hidden="true">▧</span><div><strong>Matching stamp</strong><span id="stamp-meta"></span></div><span aria-hidden="true">↓</span></a>
           </div>
+          <a id="download-combined" class="bundle-link">Download cutter + stamp in one STL (5 mm apart) ↓</a>
           <a id="download-bundle" class="bundle-link">Download the pair + measurements (.zip) ↓</a>
           <ul id="warnings" class="warnings"></ul>
           <section class="bambuddy-panel" aria-labelledby="bambuddy-heading">
@@ -94,6 +96,7 @@
               <label for="bambuddy-kind">Models to send</label>
               <select id="bambuddy-kind">
                 <option value="pair">Cutter and stamp together</option>
+                <option value="combined">Cutter and stamp in one STL (5 mm apart)</option>
                 <option value="cutter">Cookie cutter only</option>
                 <option value="stamp">Matching stamp only</option>
               </select>

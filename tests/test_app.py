@@ -46,7 +46,7 @@ def test_generation_downloads_and_persistence(client):
     assert result["preview_svg"].startswith("<svg")
     directory = Path(app.config["OUTPUT_DIR"]) / result["id"]
     assert json.loads((directory / "design.json").read_text())["id"] == result["id"]
-    for kind in ("cutter", "stamp"):
+    for kind in ("cutter", "stamp", "combined"):
         download = client.get(result["tools"][kind]["url"])
         assert download.status_code == 200
         assert download.mimetype == "model/stl"
@@ -55,8 +55,18 @@ def test_generation_downloads_and_persistence(client):
         assert download.data == (directory / result["tools"][kind]["filename"]).read_bytes()
     bundle = client.get(f'/api/designs/{result["id"]}/bundle')
     with ZipFile(BytesIO(bundle.data)) as archive:
-        assert sorted(archive.namelist()) == ["bat-cutter.stl", "bat-stamp.stl", "design.json"]
+        assert sorted(archive.namelist()) == ["bat-combined.stl", "bat-cutter.stl", "bat-stamp.stl", "design.json"]
         assert archive.read("bat-cutter.stl") == (directory / "bat-cutter.stl").read_bytes()
+        assert archive.read("bat-combined.stl") == (directory / "bat-combined.stl").read_bytes()
+
+
+def test_old_design_without_combined_returns_explicit_error(client):
+    directory = Path(app.config["OUTPUT_DIR"]) / ("0" * 32)
+    directory.mkdir()
+    (directory / "design.json").write_text(json.dumps({"tools": {}}))
+    response = client.get(f'/api/designs/{"0" * 32}/combined')
+    assert response.status_code == 404
+    assert "Generate it again" in response.json["error"]
 
 
 def test_errors_are_json_and_explicit(client):

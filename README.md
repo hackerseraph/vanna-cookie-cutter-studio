@@ -2,6 +2,7 @@
 
 A local web app that turns black-and-white raster artwork into two printable,
 watertight STL solids: an outer cookie cutter and a matching artwork stamp.
+Also export both tools in a single STL, side by side with a 5 mm gap.
 No cloud services, CDN scripts, or external image uploads. Optional Bambuddy
 integration sends generated STL models only to your configured local server.
 The interface and previews use a warm brown-and-maroon palette on cream.
@@ -21,6 +22,12 @@ dinosaur examples, then select **Generate my cookie tools**. Download individual
 STLs or a ZIP containing both tools and their measurements. The artwork preview
 shows the final cookie; the interactive 3D previews show the printable tools.
 Drag to rotate and scroll to zoom. 3D preview requires WebGL.
+Select **3D pair** next to **3D stamp** to preview the combined STL, then use
+**Download cutter + stamp in one STL**. Both tools keep their original size
+and backing-side-down orientation. They are separate watertight bodies in one
+file, aligned at their Y centers with 5 mm between their outer X bounds
+(including the cutter grip and stamp backing). Check that the combined width
+fits your printer's bed; large designs may need to be printed separately.
 
 ## Link to Bambuddy on your local network
 
@@ -60,7 +67,9 @@ send printer commands or start prints.
 The integration uses `GET /api/v1/library/folders` for the connection test and
 multipart `POST /api/v1/library/files` for uploads (`X-API-Key` authentication).
 It requires a Bambuddy version providing these endpoints. Sending both models
-uploads two separate files, not a prearranged plate. Repeated sends may create
+uploads two separate files, not a prearranged plate. Choose
+**Cutter and stamp in one STL (5 mm apart)** instead to send
+one prearranged STL containing both tools. Repeated sends may create
 duplicates; duplicate warnings from Bambuddy are displayed. If a transfer fails
 partway, already-sent filenames are reported. Check File Manager before retrying
 an interrupted transfer, since a timeout does not guarantee the upload failed.
@@ -125,6 +134,7 @@ Each generation persists under `output/<design-id>/`:
 
 - `<image-name>-cutter.stl`
 - `<image-name>-stamp.stl`
+- `<image-name>-combined.stl` — both tools, side by side, 5 mm apart
 - `design.json` — dimensions, image settings, warnings, and mesh information
 - `tools.zip`
 

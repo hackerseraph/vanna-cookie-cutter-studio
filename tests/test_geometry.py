@@ -9,7 +9,7 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 import trimesh
 
-from geometry import DesignError, Settings, build_meshes, trace_image
+from geometry import DesignError, Settings, build_meshes, combined_mesh, trace_image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +50,20 @@ def test_samples_produce_printable_matched_tools(name):
     assert meshes["cutter"].extents[2] == pytest.approx(12)
     assert meshes["stamp"].extents[2] == pytest.approx(6)
     assert meshes["stamp"].bounds[1, 2] - 3 == pytest.approx(12 / 4)
+    original_vertices = {kind: mesh.vertices.copy() for kind, mesh in meshes.items()}
+    combined = combined_mesh(meshes["cutter"], meshes["stamp"])
+    loaded = trimesh.load(BytesIO(combined.export(file_type="stl")), file_type="stl")
+    assert loaded.is_watertight
+    assert loaded.is_volume
+    assert loaded.body_count == 2
+    left, right = sorted(loaded.split(), key=lambda mesh: mesh.bounds[0, 0])
+    assert right.bounds[0, 0] - left.bounds[1, 0] == pytest.approx(5, abs=0.0001)
+    for part, kind in ((left, "cutter"), (right, "stamp")):
+        assert part.bounds[0, 2] == pytest.approx(0)
+        assert part.bounds[:, 1].mean() == pytest.approx(0, abs=0.0001)
+        assert part.extents == pytest.approx(meshes[kind].extents, abs=0.0001)
+        assert part.volume == pytest.approx(meshes[kind].volume, rel=0.0001)
+        np.testing.assert_array_equal(meshes[kind].vertices, original_vertices[kind])
 
 
 @pytest.mark.parametrize(

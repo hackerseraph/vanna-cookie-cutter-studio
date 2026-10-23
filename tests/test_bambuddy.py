@@ -85,7 +85,7 @@ def test_status_connection_and_no_secret_in_browser(client, remote):
     assert remote["calls"] == [("GET", "/api/v1/library/folders", "test-private-key")]
 
 
-@pytest.mark.parametrize("kind,count", [("pair", 2), ("cutter", 1), ("stamp", 1)])
+@pytest.mark.parametrize("kind,count", [("pair", 2), ("cutter", 1), ("stamp", 1), ("combined", 1)])
 def test_send_real_multipart_stls(client, remote, design, kind, count):
     response = client.post("/api/bambuddy/send", json={"design_id": design["id"], "kind": kind})
     assert response.status_code == 200, response.json
@@ -93,7 +93,7 @@ def test_send_real_multipart_stls(client, remote, design, kind, count):
     assert len(response.json["files"]) == count
     assert len(remote["uploads"]) == count
     for upload in remote["uploads"]:
-        tool = "cutter" if "cutter" in upload["name"] else "stamp"
+        tool = next(tool for tool in ("cutter", "stamp", "combined") if tool in upload["name"])
         assert kind == "pair" or tool == kind
         assert upload["content"] == client.get(design["tools"][tool]["url"]).data
         assert upload["mime"] == "model/stl"

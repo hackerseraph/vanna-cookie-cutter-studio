@@ -188,6 +188,18 @@ def build_meshes(design: Design) -> dict[str, trimesh.Trimesh]:
     return {"cutter": cutter, "stamp": stamp}
 
 
+def combined_mesh(cutter: trimesh.Trimesh, stamp: trimesh.Trimesh) -> trimesh.Trimesh:
+    cutter = cutter.copy()
+    stamp = stamp.copy()
+    cutter.apply_translation((-cutter.bounds[0, 0], -cutter.bounds[:, 1].mean(), -cutter.bounds[0, 2]))
+    stamp.apply_translation((
+        cutter.bounds[1, 0] + 5.0 - stamp.bounds[0, 0],
+        -stamp.bounds[:, 1].mean(),
+        -stamp.bounds[0, 2],
+    ))
+    return trimesh.util.concatenate([cutter, stamp])
+
+
 def _svg_path(shape) -> str:
     commands = []
     for part in polygons(shape):
