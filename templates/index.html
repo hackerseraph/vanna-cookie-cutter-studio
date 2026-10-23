@@ -28,6 +28,7 @@
             </label>
             <div class="examples-label">Need an idea? Try a little dinosaur.</div>
             <div id="examples" class="examples" aria-label="Example artwork"></div>
+            <button type="button" id="detect-sheet" class="secondary-button" disabled>Bundle sheet: detect &amp; edit crops</button>
             <div class="divider"></div>
             <div class="label-row"><label for="size">Cookie size</label><span class="unit-label">LONGEST SIDE</span></div>
             <div class="number-input"><input id="size" type="number" min="1" max="6" step="0.1" value="3.5" required><span>inches</span></div>
@@ -109,6 +110,47 @@
         <div class="preview-footer"><span>DESIGNED TO FIT. BUILT TO PRINT.</span><span>mm-accurate STL export</span></div>
       </section>
     </div>
+    <section id="sheet-editor" class="sheet-editor" aria-labelledby="sheet-heading" hidden>
+      <div class="section-heading"><span class="step-number">03</span><h2 id="sheet-heading">Choose designs from your sheet</h2></div>
+      <p>Drag a box to move it; drag a corner to resize. Or edit the pixel coordinates below. Include one complete outline per crop.</p>
+      <fieldset id="sheet-controls">
+        <legend class="sr-only">Bundle sheet crop editor</legend>
+        <div id="sheet-stage" class="sheet-stage">
+          <img id="sheet-image" alt="Original bundle sheet with editable crop boxes" draggable="false">
+          <div id="crop-boxes"></div>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" id="add-crop" class="secondary-button">Add crop</button>
+          <button type="button" id="delete-crop" class="secondary-button">Delete active crop</button>
+          <button type="button" id="redetect-sheet" class="secondary-button">Re-detect (replace crops)</button>
+        </div>
+        <label for="crop-list">Active crop</label>
+        <select id="crop-list"></select>
+        <div id="crop-fields" class="crop-fields" hidden>
+          <div>
+            <label class="checkbox"><input type="checkbox" id="crop-selected" checked> Include in batch</label>
+            <label for="crop-name">Design name</label><input id="crop-name" maxlength="60">
+            <label for="crop-size">Cookie longest side (inches)</label><input id="crop-size" type="number" min="1" max="6" step="0.1">
+            <div class="crop-coordinates">
+              <label>X<input id="crop-x" type="number" min="0" step="1"></label>
+              <label>Y<input id="crop-y" type="number" min="0" step="1"></label>
+              <label>Width<input id="crop-width" type="number" min="3" step="1"></label>
+              <label>Height<input id="crop-height" type="number" min="3" step="1"></label>
+            </div>
+          </div>
+          <div><span>Isolated crop preview</span><canvas id="crop-preview" aria-label="Preview of active cropped artwork"></canvas></div>
+        </div>
+        <p class="field-note">Each crop starts at the current cookie size, independently. Depth, threshold, invert and boldening use the main settings. Changing those settings requires regeneration. Nested outline rings remain stamp artwork.</p>
+        <div class="sheet-actions">
+          <button type="button" id="generate-crop" class="secondary-button">Generate active crop</button>
+          <button type="button" id="generate-sheet" class="primary-button">Generate selected designs</button>
+        </div>
+      </fieldset>
+      <p id="sheet-status" role="status" aria-live="polite"></p>
+      <div id="sheet-results" class="sheet-results"></div>
+      <button type="button" id="bundle-sheet" class="secondary-button" hidden>Build ZIP of successful designs</button>
+      <a id="download-sheet" class="bundle-link" hidden>Download all successful designs (.zip)</a>
+    </section>
     <section class="how-it-works" aria-label="How it works">
       <div><span>01 / OUTLINE</span><p>The outer silhouette becomes<br>your cookie’s cutting edge.</p></div>
       <div><span>02 / IMPRESS</span><p>The black details become a<br>matching, shallow relief stamp.</p></div>

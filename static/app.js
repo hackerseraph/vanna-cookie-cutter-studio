@@ -1,4 +1,5 @@
 import { MeshViewer } from "./viewer.js";
+import { SheetEditor } from "./sheets.js";
 
 const $ = (id) => document.getElementById(id);
 const form = $("design-form");
@@ -41,9 +42,11 @@ function selectFile(file, exampleName = null) {
     return;
   }
   selectedFile = file;
+  sheetEditor.reset();
   $("upload-title").textContent = file.name;
   $("upload-description").textContent = "Click or drop another image to replace";
   $("generate").disabled = false;
+  $("detect-sheet").disabled = false;
   document.querySelectorAll(".example-button").forEach((button) => {
     button.classList.toggle("selected", button.dataset.name === exampleName);
   });
@@ -151,53 +154,75 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.view));
 });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!selectedFile || generating || bambuddyBusy) return;
-  invalidate();
-  generating = true;
-  $("controls").disabled = true;
-  $("loading-overlay").hidden = false;
-  $("preview-stage").setAttribute("aria-busy", "true");
-  status("Generating your matched tools. Detailed images may take a moment.");
+function designSettings() {
   const data = new FormData();
-  data.set("image", selectedFile);
   data.set("size_mm", String(Number($("size").value) * 25.4));
   data.set("cutter_depth_mm", $("depth").value);
   data.set("threshold", $("threshold").value);
   data.set("invert", String($("invert").checked));
   data.set("bolden_mm", $("bolden").value);
+  return data;
+}
+
+function displayResult(metadata) {
+  invalidate();
+  result = metadata;
+  artworkUrl = URL.createObjectURL(new Blob([result.preview_svg], { type: "image/svg+xml" }));
+  $("art-preview").src = artworkUrl;
+  $("empty-state").hidden = true;
+  $("preview-toolbar").hidden = false;
+  $("result-details").hidden = false;
+  updateBambuddyControls();
+  $("preview-badge").textContent = result.name;
+  $("scale-note").textContent = `${result.cookie_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
+  $("cutter-meta").textContent = `STL · ${result.cutter_depth_mm} mm deep`;
+  $("stamp-meta").textContent = `STL · ${result.stamp_impression_mm} mm impression`;
+  for (const kind of ["cutter", "stamp", "combined"]) {
+    $(`download-${kind}`).href = result.tools[kind].url;
+    $(`download-${kind}`).setAttribute("download", result.tools[kind].filename);
+    $(`download-${kind}`).title = `Overall tool dimensions: ${result.tools[kind].dimensions_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
+  }
+  $("download-bundle").href = `/api/designs/${result.id}/bundle`;
+  $("download-bundle").setAttribute("download", `${result.name}-tools.zip`);
+  $("warnings").replaceChildren(...result.warnings.map((warning) => {
+    const item = document.createElement("li");
+    item.textContent = warning;
+    return item;
+  }));
+  status("Your cutter and stamp are ready. Download, slice in millimeters, and print backing-side down.");
+  showView("art");
+}
+
+function setGenerationBusy(busy) {
+  generating = busy;
+  $("controls").disabled = busy || bambuddyBusy;
+  document.querySelectorAll(".example-button").forEach((button) => { button.disabled = busy || bambuddyBusy; });
+  sheetEditor.setBusy(busy || bambuddyBusy);
+  updateBambuddyControls();
+}
+
+const sheetEditor = new SheetEditor({
+  json: responseJson, settings: designSettings, showResult: displayResult, busy: setGenerationBusy,
+});
+$("detect-sheet").addEventListener("click", () => sheetEditor.detect(selectedFile));
+$("redetect-sheet").addEventListener("click", () => sheetEditor.detect(selectedFile));
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!selectedFile || generating || bambuddyBusy) return;
+  invalidate();
+  setGenerationBusy(true);
+  $("loading-overlay").hidden = false;
+  $("preview-stage").setAttribute("aria-busy", "true");
+  status("Generating your matched tools. Detailed images may take a moment.");
+  const data = designSettings();
+  data.set("image", selectedFile);
   try {
-    result = await responseJson(await fetch("/api/generate", { method: "POST", body: data }));
-    artworkUrl = URL.createObjectURL(new Blob([result.preview_svg], { type: "image/svg+xml" }));
-    $("art-preview").src = artworkUrl;
-    $("empty-state").hidden = true;
-    $("preview-toolbar").hidden = false;
-    $("result-details").hidden = false;
-    updateBambuddyControls();
-    $("preview-badge").textContent = "YOUR DESIGN, READY";
-    $("scale-note").textContent = `${result.cookie_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
-    $("cutter-meta").textContent = `STL · ${result.cutter_depth_mm} mm deep`;
-    $("stamp-meta").textContent = `STL · ${result.stamp_impression_mm} mm impression`;
-    for (const kind of ["cutter", "stamp", "combined"]) {
-      $(`download-${kind}`).href = result.tools[kind].url;
-      $(`download-${kind}`).setAttribute("download", result.tools[kind].filename);
-      $(`download-${kind}`).title = `Overall tool dimensions: ${result.tools[kind].dimensions_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
-    }
-    $("download-bundle").href = `/api/designs/${result.id}/bundle`;
-    $("download-bundle").setAttribute("download", `${result.name}-tools.zip`);
-    $("warnings").replaceChildren(...result.warnings.map((warning) => {
-      const item = document.createElement("li");
-      item.textContent = warning;
-      return item;
-    }));
-    status("Your cutter and stamp are ready. Download, slice in millimeters, and print backing-side down.");
-    await showView("art");
+    displayResult(await responseJson(await fetch("/api/generate", { method: "POST", body: data })));
   } catch (error) {
     status(error.message, true);
   } finally {
-    generating = false;
-    $("controls").disabled = false;
+    setGenerationBusy(false);
     $("loading-overlay").hidden = true;
     $("preview-stage").setAttribute("aria-busy", "false");
   }
@@ -211,9 +236,9 @@ function bambuddyStatus(message, error = false) {
 function updateBambuddyControls() {
   $("bambuddy-controls").hidden = !bambuddyConfigured;
   for (const id of ["bambuddy-kind", "refresh-bambuddy", "test-bambuddy"]) {
-    $(id).disabled = bambuddyBusy;
+    $(id).disabled = bambuddyBusy || generating;
   }
-  $("send-bambuddy").disabled = bambuddyBusy || !bambuddyConfigured || !result;
+  $("send-bambuddy").disabled = bambuddyBusy || generating || !bambuddyConfigured || !result;
 }
 
 async function loadBambuddy() {
@@ -235,7 +260,8 @@ async function loadBambuddy() {
 function setBambuddyBusy(busy) {
   bambuddyBusy = busy;
   $("controls").disabled = busy || generating;
-  document.querySelectorAll(".example-button").forEach((button) => { button.disabled = busy; });
+  document.querySelectorAll(".example-button").forEach((button) => { button.disabled = busy || generating; });
+  sheetEditor.setBusy(busy || generating);
   updateBambuddyControls();
 }
 

@@ -12,8 +12,9 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
-from geometry import DesignError, Settings, build_meshes, combined_mesh, preview_svg, trace_image
+from geometry import DesignError, Settings, build_meshes, combined_mesh, preview_svg, read_image, trace_image
 from bambuddy import BambuddyClient, BambuddyError, load_config
+from sheets import MAX_CROPS, crop_image, detect_regions
 
 
 ROOT = Path(__file__).resolve().parent
@@ -60,18 +61,30 @@ def parse_settings() -> Settings:
 
 @app.post("/api/generate")
 def generate():
-    image = request.files.get("image")
-    if image is None or not image.filename:
-        raise DesignError("Choose an image before generating.")
     settings = parse_settings()
+    image = request.files.get("image")
+    if request.form.get("sheet_id"):
+        sheet = sheet_directory(request.form["sheet_id"])
+        source = read_image((sheet / "image.png").read_bytes())
+        try:
+            crop = json.loads(request.form.get("crop", "null"))
+        except ValueError as error:
+            raise DesignError("Crop must be valid JSON.") from error
+        data = crop_image(source, crop, settings.invert)
+        filename = request.form.get("name", "cookie")
+    else:
+        if image is None or not image.filename:
+            raise DesignError("Choose an image before generating.")
+        data = image.read()
+        filename = image.filename
     if not generation_lock.acquire(blocking=False):
         return jsonify(error="Another design is being generated. Please try again shortly."), 409
     try:
-        design = trace_image(image.read(), settings)
+        design = trace_image(data, settings)
         meshes = build_meshes(design)
         meshes["combined"] = combined_mesh(meshes["cutter"], meshes["stamp"])
         design_id = uuid.uuid4().hex
-        name = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(image.filename).stem).strip("-")[:60] or "cookie"
+        name = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(filename).stem).strip("-")[:60] or "cookie"
         destination = Path(app.config["OUTPUT_DIR"]) / design_id
         destination.mkdir(parents=True)
         metadata = {
@@ -111,6 +124,71 @@ def generate():
         return jsonify(metadata)
     finally:
         generation_lock.release()
+
+
+@app.post("/api/sheets/detect")
+def detect_sheet():
+    upload = request.files.get("image")
+    if upload is None or not upload.filename:
+        raise DesignError("Choose an image before detecting designs.")
+    settings = parse_settings()
+    image = read_image(upload.read())
+    regions = detect_regions(image, settings)
+    sheet_id = uuid.uuid4().hex
+    directory = Path(app.config["OUTPUT_DIR"]) / "sheets" / sheet_id
+    directory.mkdir(parents=True)
+    image.save(directory / "image.png")
+    app.logger.info("Detected %s regions in sheet %s", len(regions), sheet_id)
+    return jsonify(id=sheet_id, width=image.width, height=image.height, regions=regions,
+                   image_url=f"/api/sheets/{sheet_id}/image", max_crops=MAX_CROPS)
+
+
+def sheet_directory(sheet_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{32}", sheet_id):
+        raise DesignError("Invalid sheet ID. Upload the sheet again.")
+    directory = Path(app.config["OUTPUT_DIR"]) / "sheets" / sheet_id
+    if not (directory / "image.png").is_file():
+        raise DesignError("Sheet not found. Upload the sheet again.")
+    return directory
+
+
+@app.get("/api/sheets/<sheet_id>/image")
+def sheet_image(sheet_id: str):
+    return send_file(sheet_directory(sheet_id) / "image.png", mimetype="image/png")
+
+
+@app.post("/api/bundles")
+def create_bundle():
+    payload = request.get_json()
+    ids = payload.get("design_ids") if isinstance(payload, dict) else None
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= MAX_CROPS
+            or any(not isinstance(item, str) or not re.fullmatch(r"[0-9a-f]{32}", item) for item in ids)
+            or len(set(ids)) != len(ids)):
+        raise DesignError(f"Choose between 1 and {MAX_CROPS} distinct generated designs.")
+    directories = [Path(app.config["OUTPUT_DIR"]) / item for item in ids]
+    if any(not (directory / "design.json").is_file() for directory in directories):
+        raise DesignError("A selected design no longer exists. Generate it again.")
+    bundle_id = uuid.uuid4().hex
+    directory = Path(app.config["OUTPUT_DIR"]) / "bundles" / bundle_id
+    directory.mkdir(parents=True)
+    with ZipFile(directory / "bundle.zip", "w", ZIP_DEFLATED) as archive:
+        for index, source in enumerate(directories, 1):
+            metadata = json.loads((source / "design.json").read_text(encoding="utf-8"))
+            folder = f'{index:02d}-{metadata["name"]}'
+            for path in source.iterdir():
+                if path.suffix in {".stl", ".json"}:
+                    archive.write(path, f"{folder}/{path.name}")
+    return jsonify(url=f"/api/bundles/{bundle_id}/download")
+
+
+@app.get("/api/bundles/<bundle_id>/download")
+def download_bundle(bundle_id: str):
+    if not re.fullmatch(r"[0-9a-f]{32}", bundle_id):
+        return jsonify(error="Bundle not found."), 404
+    path = Path(app.config["OUTPUT_DIR"]) / "bundles" / bundle_id / "bundle.zip"
+    if not path.is_file():
+        return jsonify(error="Bundle not found."), 404
+    return send_file(path, mimetype="application/zip", as_attachment=True, download_name="cookie-sheet-tools.zip")
 
 
 @app.get("/api/designs/<design_id>/<kind>")

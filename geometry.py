@@ -62,24 +62,28 @@ def _contour_points(contour) -> list[tuple[float, float]]:
     return [(float(point[0][0]), float(point[0][1])) for point in contour]
 
 
-def trace_image(data: bytes, settings: Settings) -> Design:
-    settings.validate()
+def read_image(data: bytes) -> Image.Image:
     try:
         with Image.open(BytesIO(data)) as source:
             if source.format not in {"PNG", "JPEG", "WEBP", "BMP"}:
                 raise DesignError("Use a PNG, JPEG, WebP, or BMP image.")
             if source.width * source.height > 16_000_000:
                 raise DesignError("Image is too large. Use an image below 16 megapixels.")
-            source_size = source.size
             image = ImageOps.exif_transpose(source).convert("RGBA")
             background = Image.new("RGBA", image.size, "white")
             background.alpha_composite(image)
-            image = background.convert("L")
-            image.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
-            gray = np.asarray(image)
+            return background.convert("RGB")
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
         raise DesignError("The image could not be read. Upload a valid raster image.") from error
 
+
+def trace_image(data: bytes, settings: Settings) -> Design:
+    settings.validate()
+    image = read_image(data)
+    source_size = image.size
+    image = image.convert("L")
+    image.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+    gray = np.asarray(image)
     mask = (gray < settings.threshold) if not settings.invert else (gray > settings.threshold)
     if not mask.any() or mask.all():
         raise DesignError("No outline found. Use contrasting artwork and background, or adjust the threshold.")
@@ -121,8 +125,8 @@ def trace_image(data: bytes, settings: Settings) -> Design:
     discarded = [part for part in outline_parts if part != outline]
     if any(part.area > outline.area * 0.01 for part in discarded):
         raise DesignError(
-            "This image has separate, disconnected shapes. Connect them with a black outline "
-            "or crop to one connected silhouette before generating."
+            "This image has separate, disconnected shapes. Use Bundle sheet: detect & edit crops "
+            "to generate them separately, or crop to one connected silhouette."
         )
     outline = Polygon(outline.exterior).simplify(0.06 / rough_scale, preserve_topology=True)
     x0, y0, x1, y1 = outline.bounds

@@ -29,6 +29,55 @@ file, aligned at their Y centers with 5 mm between their outer X bounds
 (including the cutter grip and stamp backing). Check that the combined width
 fits your printer's bed; large designs may need to be printed separately.
 
+## Bundle sheets and editable crops
+
+For artwork sheets containing several separate designs:
+
+1. Upload the sheet, then select **Bundle sheet: detect & edit crops** instead
+   of the normal Generate button. Scroll to **Choose designs from your sheet**.
+2. Review the numbered boxes. Click a box or choose it in **Active crop**.
+   Drag the box to move it and drag any corner to resize it. Pixel coordinate
+   fields provide the same controls without dragging. Use **Add crop** or
+   **Delete active crop** to correct detection.
+3. Check the **Isolated crop preview**. Include one complete design in each
+   box and avoid neighboring artwork. Internal details and nested outline
+   rings are grouped inside the outer silhouette; the rings remain stamp
+   artwork, not additional designs.
+4. Name each crop and set its cookie size. Each crop starts at the main
+   cookie-size setting, independently (3.5 inches by default), not a scaled
+   share of the sheet. Uncheck **Include in batch** for unwanted crops.
+5. Choose **Generate active crop** to try one, or **Generate selected designs**
+   to process the selected crops sequentially. Depth, threshold, invert and
+   boldening use the main settings. Keep the page open while generating.
+6. Successful results have individual STL and ZIP downloads. Use
+   **Preview / Bambuddy** on a result to load its artwork, 3D tools and
+   Bambuddy controls in the existing workbench. Choose **Build ZIP of successful
+   designs**, then **Download all successful designs** for the collection.
+
+The batch ZIP puts each design's cutter, stamp, combined 5 mm-spaced pair and
+measurements into a separate numbered folder, even when names repeat. It does
+not pack the whole collection onto one printer plate. A failed crop is shown
+with its error and does not discard successful designs. Edit the failing crop
+and generate again. Each generation run replaces the displayed batch results;
+previously generated files remain under `output/`.
+
+Detection uses the current threshold/invert settings and ignores small specks.
+Touching designs may be detected as one region; split them manually. Blank or
+open-line sheets may need manually added crops. **Re-detect (replace crops)**
+replaces edits after successful detection. Up to 24 crops are supported per
+sheet; split larger sheets into separate uploads. The existing 12 MB and
+16-megapixel limits apply. Coordinates refer to the EXIF-oriented source,
+before tracing is reduced to 1200 pixels per crop. Transparency is composited
+onto white. A small background border is added around extracted crops to
+support outlines touching their crop edges.
+
+Original uploads are not edited. Normalized sheets and built batch ZIPs persist
+under `output/sheets/` and `output/bundles/`; individual generated designs use
+their usual output directories. Crop edits live in the current browser page:
+download your results before closing or refreshing it. After changing crops or
+settings, regenerate to update the output; existing downloads represent the
+settings used when they were generated.
+
 ## Link to Bambuddy on your local network
 
 [Bambuddy](https://github.com/maziggy/bambuddy) manages the printer connection,
