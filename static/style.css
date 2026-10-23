@@ -1,8 +1,8 @@
 :root{--paper:#f8f4ee;--white:#fffdfa;--ink:#432c25;--muted:#85716a;--line:#e4d9d0;--accent:#773347;--accent-hover:#5e2638}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
-button,input{font:inherit}
-button,a,input,summary{outline-offset:5px}
+button,input,select{font:inherit}
+button,a,input,select,summary{outline-offset:5px}
 button,a,summary{touch-action:manipulation}
 button{cursor:pointer}
 button:disabled{cursor:default;opacity:.5}
@@ -105,6 +105,14 @@ h3{font-family:Georgia,serif;font-size:24px;font-weight:normal;margin:0 0 12px}
 .bundle-link{display:block;text-align:center;color:var(--accent);font-size:10px;margin-top:18px;text-underline-offset:4px}
 .warnings{font-size:10px;color:#927b69;line-height:1.7;padding-left:14px;margin:22px 0 0}
 .warnings li+li{margin-top:5px}
+.bambuddy-panel{border-top:1px solid var(--line);margin-top:24px;padding-top:22px}
+.bambuddy-panel h3{font-size:21px}
+.bambuddy-panel select{display:block;width:100%;padding:10px;margin:8px 0 16px;border:1px solid var(--line);border-radius:6px;background:var(--white);color:var(--ink)}
+.bambuddy-panel .primary-button{margin:12px 0}
+.bambuddy-panel .bundle-link{margin:14px 0 20px}
+.secondary-button{border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--accent);padding:10px 14px;margin-bottom:14px}
+#bambuddy-status{font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+#bambuddy-status.error{color:#8b2e42}
 .preview-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:22px 24px;color:#9b816d;font-size:9px}
 .preview-footer span:first-child{font-size:8px;letter-spacing:1px}
 .how-it-works{display:grid;grid-template-columns:1fr 1fr 1fr 1.1fr;gap:30px;border-top:1px solid var(--line);margin-top:47px;padding:35px 0}

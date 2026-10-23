@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import re
 import threading
+from urllib.parse import urlsplit
 import uuid
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -12,13 +13,16 @@ from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from geometry import DesignError, Settings, build_meshes, preview_svg, trace_image
+from bambuddy import BambuddyClient, BambuddyError, load_config
 
 
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 app.config["OUTPUT_DIR"] = ROOT / "output"
+app.config["BAMBUDDY_CONFIG"] = ROOT / "bambuddy.local.json"
 generation_lock = threading.Lock()
+bambuddy_lock = threading.Lock()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
@@ -126,6 +130,92 @@ def download(design_id: str, kind: str):
     )
 
 
+@app.before_request
+def protect_bambuddy():
+    if not request.path.startswith("/api/bambuddy"):
+        return None
+    if urlsplit(request.host_url).hostname not in {"localhost", "127.0.0.1", "::1"}:
+        return jsonify(error="Bambuddy integration is available only through localhost."), 403
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        if origin and origin != request.host_url.rstrip("/"):
+            return jsonify(error="Cross-origin Bambuddy requests are not allowed."), 403
+        if not request.is_json:
+            return jsonify(error="Bambuddy requests must use application/json."), 415
+    return None
+
+
+@app.get("/api/bambuddy")
+def bambuddy_status():
+    path = Path(app.config["BAMBUDDY_CONFIG"])
+    if not path.exists():
+        return jsonify(configured=False, message="Link Bambuddy using bambuddy.local.json. See the README setup.")
+    config = load_config(path)
+    return jsonify(
+        configured=True, library_url=config.library_url,
+        message="Bambuddy configured. Test the connection before sending models.",
+    )
+
+
+def bambuddy_payload() -> dict:
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        raise BambuddyError("Bambuddy requests must contain a JSON object.")
+    return payload
+
+
+@app.post("/api/bambuddy/test")
+def test_bambuddy():
+    bambuddy_payload()
+    config = load_config(Path(app.config["BAMBUDDY_CONFIG"]))
+    BambuddyClient(config).check_connection()
+    return jsonify(message="Connected to Bambuddy's library.", library_url=config.library_url)
+
+
+@app.post("/api/bambuddy/send")
+def send_to_bambuddy():
+    payload = bambuddy_payload()
+    design_id = payload.get("design_id")
+    kind = payload.get("kind")
+    if not isinstance(design_id, str) or not re.fullmatch(r"[0-9a-f]{32}", design_id):
+        raise BambuddyError("Choose a generated design to send.")
+    if kind not in ("cutter", "stamp", "pair"):
+        raise BambuddyError("Choose cutter, stamp or pair.")
+    config = load_config(Path(app.config["BAMBUDDY_CONFIG"]))
+    directory = Path(app.config["OUTPUT_DIR"]) / design_id
+    manifest = directory / "design.json"
+    if not manifest.is_file():
+        return jsonify(error="Design not found."), 404
+    metadata = json.loads(manifest.read_text(encoding="utf-8"))
+    kinds = ("cutter", "stamp") if kind == "pair" else (kind,)
+    models = [directory / metadata["tools"][tool]["filename"] for tool in kinds]
+    if not bambuddy_lock.acquire(blocking=False):
+        return jsonify(error="Another Bambuddy transfer is running. Try again shortly."), 409
+    try:
+        client = BambuddyClient(config)
+        uploaded = []
+        for model in models:
+            try:
+                uploaded.append(client.upload(model))
+            except BambuddyError as error:
+                completed = ", ".join(item["filename"] for item in uploaded) or "none confirmed"
+                raise BambuddyError(
+                    f"{error} Files already sent: {completed}. "
+                    "Check Bambuddy File Manager before retrying to avoid duplicates."
+                ) from error
+        app.logger.info("Sent design %s (%s) to Bambuddy library", design_id, kind)
+        return jsonify(files=uploaded, library_url=config.library_url, started=False,
+                       message="Models sent to Bambuddy. Open File Manager to slice and manage printing. No print was started.")
+    finally:
+        bambuddy_lock.release()
+
+
+@app.errorhandler(BambuddyError)
+def bambuddy_error(error: BambuddyError):
+    app.logger.warning("Bambuddy operation rejected: %s", error)
+    return jsonify(error=str(error)), 400
+
+
 @app.errorhandler(DesignError)
 def invalid_design(error: DesignError):
     app.logger.warning("Design rejected: %s", error)
@@ -142,9 +232,9 @@ def too_large(error):
 def unexpected_error(error: Exception):
     if isinstance(error, HTTPException):
         return jsonify(error=error.description), error.code
-    app.logger.exception("Design operation failed")
-    return jsonify(error="Generation failed unexpectedly. See the server log for details."), 500
+    app.logger.exception("Studio operation failed")
+    return jsonify(error="Operation failed unexpectedly. See the server log for details."), 500
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=5400, debug=False)

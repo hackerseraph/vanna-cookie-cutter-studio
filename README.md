@@ -2,7 +2,8 @@
 
 A local web app that turns black-and-white raster artwork into two printable,
 watertight STL solids: an outer cookie cutter and a matching artwork stamp.
-No cloud services, CDN scripts, accounts, or external image uploads.
+No cloud services, CDN scripts, or external image uploads. Optional Bambuddy
+integration sends generated STL models only to your configured local server.
 The interface and previews use a warm brown-and-maroon palette on cream.
 
 ## Start
@@ -15,11 +16,62 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Open http://127.0.0.1:5000. Upload an image or select one of the four included
+Open http://127.0.0.1:5400. Upload an image or select one of the four included
 dinosaur examples, then select **Generate my cookie tools**. Download individual
 STLs or a ZIP containing both tools and their measurements. The artwork preview
 shows the final cookie; the interactive 3D previews show the printable tools.
 Drag to rotate and scroll to zoom. 3D preview requires WebGL.
+
+## Link to Bambuddy on your local network
+
+[Bambuddy](https://github.com/maziggy/bambuddy) manages the printer connection,
+slicing and printing. This studio can send the cutter, stamp or both STLs to
+Bambuddy's **File Manager** over its REST API; it does not install a slicer,
+send printer commands or start prints.
+
+1. Run Bambuddy on this computer or another computer on your LAN. Note its
+   address, such as `http://192.168.1.100:8000` (use your actual IP and port).
+2. Copy the configuration template:
+   ```bash
+   cp bambuddy.example.json bambuddy.local.json
+   chmod 600 bambuddy.local.json
+   ```
+3. Edit `bambuddy.local.json`:
+   - `url`: Bambuddy's base URL, without `/api/v1` or `/files`. Use a private
+     LAN or loopback **IP address**, not a hostname; reverse-proxy base paths
+     are supported. HTTP and HTTPS are accepted. HTTPS certificates must be
+     trusted by this computer; certificate verification is never disabled.
+   - `api_key`: an API key created in Bambuddy with library read and upload
+     permissions. Leave empty only if your trusted LAN instance permits
+     unauthenticated API access. Keys remain server-side and are never sent
+     to this studio's browser UI. The local configuration is ignored by Git.
+   - `folder_id`: optional numeric Bambuddy library folder ID, or `null` for
+     the root folder. Use a writable folder.
+4. Generate a design, then use **Continue in Bambuddy** below the downloads.
+   Select **Reload local configuration**, **Test connection**, choose the
+   models, and select **Send models to Bambuddy**. No restart is needed after
+   changing the configuration.
+5. Select **Open Bambuddy File Manager** to inspect the models and choose the
+   correct printer, nozzle, filament and slicing settings in Bambuddy. Its
+   slicing service must be configured separately for in-Bambuddy slicing;
+   otherwise download the STLs and use Bambu Studio, then import the sliced
+   plate into Bambuddy. Inspect the toolpaths before starting a print.
+
+The integration uses `GET /api/v1/library/folders` for the connection test and
+multipart `POST /api/v1/library/files` for uploads (`X-API-Key` authentication).
+It requires a Bambuddy version providing these endpoints. Sending both models
+uploads two separate files, not a prearranged plate. Repeated sends may create
+duplicates; duplicate warnings from Bambuddy are displayed. If a transfer fails
+partway, already-sent filenames are reported. Check File Manager before retrying
+an interrupted transfer, since a timeout does not guarantee the upload failed.
+Unreachable hosts, authentication errors and incompatible API responses appear
+in the UI and server logs without exposing the API key.
+
+Only explicit sends transfer models. Original images are never sent.
+Keep both services on a trusted network, especially when using HTTP, which
+does not encrypt the API key. No LAN discovery or automatic printing occurs.
+The studio still binds only to `127.0.0.1:5400`; it reaches Bambuddy over the LAN
+without exposing the studio itself to the network.
 
 ## Dimensions and operation
 
@@ -91,7 +143,8 @@ not public deployment.
 
 Tests cover all four supplied images, STL export/reload, watertight single-body
 meshes, actual dimensions, aspect ratio in both orientations, mirrored relief,
-quarter-depth impressions, invalid inputs, API downloads, and persisted bundles.
+quarter-depth impressions, invalid inputs, API downloads, persisted bundles,
+and the Bambuddy API contract (using a local test server; no printer required).
 
 ## Food-contact note
 

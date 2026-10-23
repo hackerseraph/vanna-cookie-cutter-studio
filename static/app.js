@@ -7,6 +7,8 @@ let result = null;
 let artworkUrl = null;
 let viewer = null;
 let generating = false;
+let bambuddyBusy = false;
+let bambuddyConfigured = false;
 let viewRequest = 0;
 const meshCache = new Map();
 
@@ -17,6 +19,7 @@ function status(message, error = false) {
 
 function invalidate() {
   result = null;
+  updateBambuddyControls();
   viewRequest++;
   meshCache.clear();
   $("result-details").hidden = true;
@@ -32,7 +35,7 @@ function invalidate() {
 }
 
 function selectFile(file, exampleName = null) {
-  if (!file || generating) return;
+  if (!file || generating || bambuddyBusy) return;
   if (file.size > 12 * 1024 * 1024) {
     status("Choose an image smaller than 12 MB.", true);
     return;
@@ -51,7 +54,7 @@ $("image-input").addEventListener("change", (event) => selectFile(event.target.f
 for (const name of ["dragenter", "dragover"]) {
   $("drop-zone").addEventListener(name, (event) => {
     event.preventDefault();
-    if (!generating) $("drop-zone").classList.add("dragging");
+    if (!generating && !bambuddyBusy) $("drop-zone").classList.add("dragging");
   });
 }
 for (const name of ["dragleave", "drop"]) {
@@ -150,7 +153,7 @@ document.querySelectorAll("[data-view]").forEach((button) => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!selectedFile || generating) return;
+  if (!selectedFile || generating || bambuddyBusy) return;
   invalidate();
   generating = true;
   $("controls").disabled = true;
@@ -171,6 +174,7 @@ form.addEventListener("submit", async (event) => {
     $("empty-state").hidden = true;
     $("preview-toolbar").hidden = false;
     $("result-details").hidden = false;
+    updateBambuddyControls();
     $("preview-badge").textContent = "YOUR DESIGN, READY";
     $("scale-note").textContent = `${result.cookie_mm.map((n) => n.toFixed(1)).join(" × ")} mm`;
     $("cutter-meta").textContent = `STL · ${result.cutter_depth_mm} mm deep`;
@@ -199,4 +203,77 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+function bambuddyStatus(message, error = false) {
+  $("bambuddy-status").textContent = message;
+  $("bambuddy-status").className = error ? "error" : "";
+}
+
+function updateBambuddyControls() {
+  $("bambuddy-controls").hidden = !bambuddyConfigured;
+  for (const id of ["bambuddy-kind", "refresh-bambuddy", "test-bambuddy"]) {
+    $(id).disabled = bambuddyBusy;
+  }
+  $("send-bambuddy").disabled = bambuddyBusy || !bambuddyConfigured || !result;
+}
+
+async function loadBambuddy() {
+  setBambuddyBusy(true);
+  try {
+    const config = await responseJson(await fetch("/api/bambuddy"));
+    bambuddyConfigured = config.configured;
+    if (config.library_url) $("open-bambuddy").href = config.library_url;
+    bambuddyStatus(config.message);
+  } catch (error) {
+    bambuddyConfigured = false;
+    $("open-bambuddy").removeAttribute("href");
+    bambuddyStatus(error.message, true);
+  } finally {
+    setBambuddyBusy(false);
+  }
+}
+
+function setBambuddyBusy(busy) {
+  bambuddyBusy = busy;
+  $("controls").disabled = busy || generating;
+  document.querySelectorAll(".example-button").forEach((button) => { button.disabled = busy; });
+  updateBambuddyControls();
+}
+
+$("refresh-bambuddy").addEventListener("click", loadBambuddy);
+$("test-bambuddy").addEventListener("click", async () => {
+  if (bambuddyBusy) return;
+  setBambuddyBusy(true);
+  bambuddyStatus("Checking Bambuddy on your local network...");
+  try {
+    const connection = await responseJson(await fetch("/api/bambuddy/test", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: "{}",
+    }));
+    bambuddyStatus(connection.message);
+  } catch (error) {
+    bambuddyStatus(error.message, true);
+  } finally {
+    setBambuddyBusy(false);
+  }
+});
+$("send-bambuddy").addEventListener("click", async () => {
+  if (!result || bambuddyBusy) return;
+  setBambuddyBusy(true);
+  bambuddyStatus("Sending models to Bambuddy. No print will be started.");
+  try {
+    const upload = await responseJson(await fetch("/api/bambuddy/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ design_id: result.id, kind: $("bambuddy-kind").value }),
+    }));
+    $("open-bambuddy").href = upload.library_url;
+    bambuddyStatus(`${upload.message} Files: ${upload.files.map((file) =>
+      `${file.filename}${file.duplicate_of ? " (duplicate already in library)" : ""}`).join(", ")}`);
+  } catch (error) {
+    bambuddyStatus(error.message, true);
+  } finally {
+    setBambuddyBusy(false);
+  }
+});
+
 loadExamples();
+loadBambuddy();

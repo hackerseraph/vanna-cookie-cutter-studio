@@ -85,6 +85,23 @@
           </div>
           <a id="download-bundle" class="bundle-link">Download the pair + measurements (.zip) ↓</a>
           <ul id="warnings" class="warnings"></ul>
+          <section class="bambuddy-panel" aria-labelledby="bambuddy-heading">
+            <h3 id="bambuddy-heading">Continue in Bambuddy</h3>
+            <p class="field-note">Send STL models over your local network. Slice and manage printers in Bambuddy; this app never starts a print.</p>
+            <button type="button" id="refresh-bambuddy" class="secondary-button">Reload local configuration</button>
+            <div id="bambuddy-controls" hidden>
+              <button type="button" id="test-bambuddy" class="secondary-button">Test connection</button>
+              <label for="bambuddy-kind">Models to send</label>
+              <select id="bambuddy-kind">
+                <option value="pair">Cutter and stamp together</option>
+                <option value="cutter">Cookie cutter only</option>
+                <option value="stamp">Matching stamp only</option>
+              </select>
+              <button type="button" id="send-bambuddy" class="primary-button">Send models to Bambuddy</button>
+              <a id="open-bambuddy" class="bundle-link" target="_blank" rel="noopener noreferrer">Open Bambuddy File Manager</a>
+            </div>
+            <p id="bambuddy-status" role="status" aria-live="polite"></p>
+          </section>
         </div>
         <div class="preview-footer"><span>DESIGNED TO FIT. BUILT TO PRINT.</span><span>mm-accurate STL export</span></div>
       </section>
