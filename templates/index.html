@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f4ee">
+  <title>Vanna's Cookie Cutter Studio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1><a class="brand" href="/">Vanna's Cookie Cutter Studio</a></h1>
+  </header>
+  <main>
+    <div class="workspace">
+      <section class="settings-panel" aria-labelledby="design-heading">
+        <div class="section-heading"><span class="step-number">01</span><h2 id="design-heading">Make it yours</h2></div>
+        <form id="design-form">
+          <fieldset id="controls">
+            <legend class="sr-only">Image and design settings</legend>
+            <label class="upload-area" id="drop-zone" for="image-input">
+              <span class="upload-icon" aria-hidden="true">↥</span>
+              <strong id="upload-title">Drop your artwork here</strong>
+              <span id="upload-description">or click to choose an image</span>
+              <small>PNG, JPG, WEBP, BMP · up to 12 MB</small>
+              <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp,image/bmp">
+            </label>
+            <div class="examples-label">Need an idea? Try a little dinosaur.</div>
+            <div id="examples" class="examples" aria-label="Example artwork"></div>
+            <div class="divider"></div>
+            <div class="label-row"><label for="size">Cookie size</label><span class="unit-label">LONGEST SIDE</span></div>
+            <div class="number-input"><input id="size" type="number" min="1" max="6" step="0.1" value="3.5" required><span>inches</span></div>
+            <p class="field-note">Aspect ratio stays true. Measures the cookie outline;<br>the cutter’s grip rim adds 6 mm overall.</p>
+            <div class="two-columns">
+              <div><label for="depth">Cutter depth</label><div class="number-input"><input id="depth" type="number" min="6" max="25" step="0.5" value="12" required><span>mm</span></div></div>
+              <div><label for="stamp-depth">Stamp impression</label><div class="number-input readonly"><output id="stamp-depth">3</output><span>mm</span></div></div>
+            </div>
+            <p class="field-note">A gentle impression, always ¼ of the cutter depth.</p>
+            <details class="advanced">
+              <summary>Image adjustments <span aria-hidden="true">+</span></summary>
+              <div class="label-row"><label for="threshold">Black / white threshold</label><output id="threshold-value">160</output></div>
+              <input id="threshold" type="range" min="1" max="254" value="160">
+              <label class="checkbox"><input id="invert" type="checkbox"> Light artwork on a dark background</label>
+              <div class="label-row"><label for="bolden">Line boldening</label><output id="bolden-value">0.15 mm</output></div>
+              <input id="bolden" type="range" min="0" max="0.6" step="0.05" value="0.15">
+              <p class="field-note">Thicken fine stamp details for easier printing.</p>
+            </details>
+            <button class="primary-button" id="generate" type="submit" disabled><span>Generate my cookie tools</span><span aria-hidden="true">↗</span></button>
+          </fieldset>
+        </form>
+        <p class="privacy-note">Your images stay on this computer. No accounts. No cloud.</p>
+        <div id="status" role="status" aria-live="polite"></div>
+      </section>
+      <section class="preview-panel" aria-labelledby="preview-heading">
+        <div class="preview-header">
+          <div class="section-heading"><span class="step-number">02</span><h2 id="preview-heading">Meet your next batch</h2></div>
+          <span class="preview-badge" id="preview-badge">YOUR WORKBENCH</span>
+        </div>
+        <div class="preview-stage" id="preview-stage" aria-busy="false">
+          <div class="empty-state" id="empty-state">
+            <div class="cookie-illustration" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+            <h3>Something sweet starts here.</h3>
+            <p>Add a black-and-white image to get started.<br>We’ll handle the outlines and the little details.</p>
+            <span class="empty-caption">ONE IMAGE → TWO PERFECTLY MATCHED TOOLS</span>
+          </div>
+          <img id="art-preview" alt="Cookie outline and raised stamp artwork" hidden>
+          <canvas id="mesh-preview" aria-label="Interactive 3D preview. Drag to rotate, scroll to zoom." hidden></canvas>
+          <div id="loading-overlay" hidden><span class="spinner"></span><strong>Shaping something good…</strong><span>Tracing artwork &amp; building watertight STLs</span></div>
+          <span id="view-caption" hidden>Drag to rotate · Scroll to zoom</span>
+        </div>
+        <div class="preview-toolbar" id="preview-toolbar" hidden>
+          <div class="tabs" role="group" aria-label="Preview mode">
+            <button type="button" data-view="art" class="active" aria-pressed="true">Cookie artwork</button>
+            <button type="button" data-view="cutter" aria-pressed="false">3D cutter</button>
+            <button type="button" data-view="stamp" aria-pressed="false">3D stamp</button>
+          </div>
+          <span class="scale-note" id="scale-note"></span>
+        </div>
+        <div class="result-details" id="result-details" hidden>
+          <div class="result-heading"><div><span class="eyebrow">READY FOR YOUR PRINTER</span><h3>A matching pair. Made by you.</h3></div><span class="solid-badge">✓ Watertight solids</span></div>
+          <div class="download-grid">
+            <a class="download-card" id="download-cutter"><span class="tool-icon" aria-hidden="true">⬡</span><div><strong>Cookie cutter</strong><span id="cutter-meta"></span></div><span aria-hidden="true">↓</span></a>
+            <a class="download-card" id="download-stamp"><span class="tool-icon stamp-icon" aria-hidden="true">▧</span><div><strong>Matching stamp</strong><span id="stamp-meta"></span></div><span aria-hidden="true">↓</span></a>
+          </div>
+          <a id="download-bundle" class="bundle-link">Download the pair + measurements (.zip) ↓</a>
+          <ul id="warnings" class="warnings"></ul>
+        </div>
+        <div class="preview-footer"><span>DESIGNED TO FIT. BUILT TO PRINT.</span><span>mm-accurate STL export</span></div>
+      </section>
+    </div>
+    <section class="how-it-works" aria-label="How it works">
+      <div><span>01 / OUTLINE</span><p>The outer silhouette becomes<br>your cookie’s cutting edge.</p></div>
+      <div><span>02 / IMPRESS</span><p>The black details become a<br>matching, shallow relief stamp.</p></div>
+      <div><span>03 / BAKE HAPPY</span><p>Print flat, cut your dough,<br>remove the cutter, then stamp.</p></div>
+      <p class="maker-note">Your art.<br>Your cookies.<br><em>Your kind of happy.</em></p>
+    </section>
+    <footer>Made for the things you make. <span>Always check material suitability for food contact.</span></footer>
+  </main>
+</body>
+</html>
